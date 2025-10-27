@@ -50,7 +50,11 @@ app.get('/api/health', async (req, res) => {
         });
     }
 });
-// Error handling middleware
+// 404 handler
+app.use((req, res) => {
+    res.status(404).json({ error: 'Route not found' });
+});
+// Error handling middleware - должен быть последним
 app.use((err, req, res, next) => {
     console.error('Error:', err);
     const errorMessage = err instanceof Error ? err.message : 'Something went wrong';
@@ -59,10 +63,6 @@ app.use((err, req, res, next) => {
         error: 'Internal Server Error',
         message: isDevelopment ? errorMessage : 'Something went wrong'
     });
-});
-// 404 handler
-app.use('*', (req, res) => {
-    res.status(404).json({ error: 'Route not found' });
 });
 // Initialize database connection
 const initializeAPI = async () => {
