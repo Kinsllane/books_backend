@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { TradeController } from '../controllers/tradeController';
-import { authenticateToken } from '../middleware/auth';
+import { authenticateJWT } from '../middleware/passportAuth';
 import { validate } from '../middleware/validation';
 import { 
   proposeTradeSchema, 
@@ -11,11 +11,11 @@ import {
 const router = Router();
 const tradeController = new TradeController();
 
-router.get('/my-trades', authenticateToken, tradeController.getMyTrades);
-router.get('/incoming', authenticateToken, tradeController.getIncomingTrades);
-router.get('/outgoing', authenticateToken, tradeController.getOutgoingTrades);
-router.post('/propose', authenticateToken, validate(proposeTradeSchema), tradeController.proposeTrade);
-router.put('/:id/respond', authenticateToken, validate(respondToTradeSchema), tradeController.respondToTrade);
-router.delete('/:id/cancel', authenticateToken, validate(cancelTradeSchema), tradeController.cancelTrade);
+router.get('/my-trades', authenticateJWT, tradeController.getMyTrades);
+router.get('/incoming', authenticateJWT, tradeController.getIncomingTrades);
+router.get('/outgoing', authenticateJWT, tradeController.getOutgoingTrades);
+router.post('/propose', authenticateJWT, validate(proposeTradeSchema), tradeController.proposeTrade);
+router.put('/:id/respond', authenticateJWT, validate(respondToTradeSchema), tradeController.respondToTrade);
+router.delete('/:id/cancel', authenticateJWT, validate(cancelTradeSchema), tradeController.cancelTrade);
 
 export default router;

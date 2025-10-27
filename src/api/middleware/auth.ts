@@ -2,8 +2,10 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../../models/User';
 
+// Интерфейс для расширения Request с информацией о пользователе
 export interface AuthRequest extends Request {
   user?: User;
+  userId?: string;
 }
 
 export const authenticateToken = async (

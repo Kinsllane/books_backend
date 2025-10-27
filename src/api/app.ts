@@ -2,15 +2,20 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import swaggerUi from 'swagger-ui-express';
 import { testConnection } from '../config/database';
 import sequelize from '../config/database';
 import userRoutes from './routes/userRoutes';
 import bookRoutes from './routes/bookRoutes';
 import authRoutes from './routes/authRoutes';
 import tradeRoutes from './routes/tradeRoutes';
+import swaggerSpec from './config/swagger';
 
 // Импорт моделей для синхронизации
 import '../models';
+
+// Импорт Passport
+import passport from './config/passport';
 
 const app = express();
 
@@ -20,6 +25,15 @@ app.use(cors());
 app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Инициализация Passport
+app.use(passport.initialize());
+
+// Swagger documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'BookSwap API Documentation'
+}));
 
 // Routes
 app.use('/api/auth', authRoutes);

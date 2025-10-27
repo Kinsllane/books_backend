@@ -11,7 +11,8 @@ class TradeController {
                     res.status(401).json({ error: 'Authentication required' });
                     return;
                 }
-                const trades = await this.tradeService.getUserTrades(req.user.id);
+                const authUser = req.user;
+                const trades = await this.tradeService.getUserTrades(authUser.id);
                 res.status(200).json(trades);
             }
             catch (error) {
@@ -24,7 +25,8 @@ class TradeController {
                     res.status(401).json({ error: 'Authentication required' });
                     return;
                 }
-                const trades = await this.tradeService.getIncomingTrades(req.user.id);
+                const authUser = req.user;
+                const trades = await this.tradeService.getIncomingTrades(authUser.id);
                 res.status(200).json(trades);
             }
             catch (error) {
@@ -37,7 +39,8 @@ class TradeController {
                     res.status(401).json({ error: 'Authentication required' });
                     return;
                 }
-                const trades = await this.tradeService.getOutgoingTrades(req.user.id);
+                const authUser = req.user;
+                const trades = await this.tradeService.getOutgoingTrades(authUser.id);
                 res.status(200).json(trades);
             }
             catch (error) {
@@ -50,8 +53,9 @@ class TradeController {
                     res.status(401).json({ error: 'Authentication required' });
                     return;
                 }
+                const authUser = req.user;
                 const { initiatorBookId, recipientBookId } = req.body;
-                const trade = await this.tradeService.proposeTrade(req.user.id, initiatorBookId, recipientBookId);
+                const trade = await this.tradeService.proposeTrade(authUser.id, initiatorBookId, recipientBookId);
                 res.status(201).json(trade);
             }
             catch (error) {
@@ -64,9 +68,10 @@ class TradeController {
                     res.status(401).json({ error: 'Authentication required' });
                     return;
                 }
+                const authUser = req.user;
                 const { id } = req.params;
                 const { response } = req.body; // 'accepted' | 'rejected'
-                const result = await this.tradeService.respondToTrade(id, response, req.user.id);
+                const result = await this.tradeService.respondToTrade(id, response, authUser.id);
                 res.status(200).json(result);
             }
             catch (error) {
@@ -79,8 +84,9 @@ class TradeController {
                     res.status(401).json({ error: 'Authentication required' });
                     return;
                 }
+                const authUser = req.user;
                 const { id } = req.params;
-                await this.tradeService.cancelTrade(id, req.user.id);
+                await this.tradeService.cancelTrade(id, authUser.id);
                 res.status(204).send();
             }
             catch (error) {

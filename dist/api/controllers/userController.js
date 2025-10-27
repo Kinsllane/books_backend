@@ -20,7 +20,8 @@ class UserController {
                     res.status(401).json({ error: 'Authentication required' });
                     return;
                 }
-                const user = await this.userService.getUserById(req.user.id);
+                const authUser = req.user;
+                const user = await this.userService.getUserById(authUser.id);
                 res.status(200).json(user);
             }
             catch (error) {
@@ -43,7 +44,8 @@ class UserController {
                     res.status(401).json({ error: 'Authentication required' });
                     return;
                 }
-                const user = await this.userService.updateUser(req.user.id, req.body);
+                const authUser = req.user;
+                const user = await this.userService.updateUser(authUser.id, req.body);
                 res.status(200).json(user);
             }
             catch (error) {
@@ -56,8 +58,9 @@ class UserController {
                     res.status(401).json({ error: 'Authentication required' });
                     return;
                 }
+                const authUser = req.user;
                 const { amount } = req.body;
-                const user = await this.userService.topUpBalance(req.user.id, amount);
+                const user = await this.userService.topUpBalance(authUser.id, amount);
                 res.status(200).json(user);
             }
             catch (error) {
@@ -70,8 +73,9 @@ class UserController {
                     res.status(401).json({ error: 'Authentication required' });
                     return;
                 }
+                const authUser = req.user;
                 const { id } = req.params;
-                await this.userService.deleteUser(id, req.user.id);
+                await this.userService.deleteUser(id, authUser.id);
                 res.status(204).send();
             }
             catch (error) {

@@ -1,11 +1,10 @@
-import { Response } from 'express';
-import { AuthRequest } from '../middleware/auth';
+import { Request, Response } from 'express';
 import { BookService } from '../services/bookService';
 
 export class BookController {
   private bookService = new BookService();
 
-  getAllBooks = async (req: AuthRequest, res: Response): Promise<void> => {
+  getAllBooks = async (req: Request, res: Response): Promise<void> => {
     try {
       const { search, genre, forSale, forTrade } = req.query;
       
@@ -23,7 +22,7 @@ export class BookController {
     }
   };
 
-  getBookById = async (req: AuthRequest, res: Response): Promise<void> => {
+  getBookById = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const book = await this.bookService.getBookById(id);
@@ -33,58 +32,62 @@ export class BookController {
     }
   };
 
-  createBook = async (req: AuthRequest, res: Response): Promise<void> => {
+  createBook = async (req: Request, res: Response): Promise<void> => {
     try {
       if (!req.user) {
         res.status(401).json({ error: 'Authentication required' });
         return;
       }
 
-      const book = await this.bookService.createBook(req.body, req.user.id);
+      const user = req.user as any;
+      const book = await this.bookService.createBook(req.body, user.id);
       res.status(201).json(book);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   };
 
-  updateBook = async (req: AuthRequest, res: Response): Promise<void> => {
+  updateBook = async (req: Request, res: Response): Promise<void> => {
     try {
       if (!req.user) {
         res.status(401).json({ error: 'Authentication required' });
         return;
       }
 
+      const user = req.user as any;
       const { id } = req.params;
-      const book = await this.bookService.updateBook(id, req.body, req.user.id);
+      const book = await this.bookService.updateBook(id, req.body, user.id);
       res.status(200).json(book);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   };
 
-  deleteBook = async (req: AuthRequest, res: Response): Promise<void> => {
+  deleteBook = async (req: Request, res: Response): Promise<void> => {
     try {
       if (!req.user) {
         res.status(401).json({ error: 'Authentication required' });
         return;
       }
 
+      const user = req.user as any;
       const { id } = req.params;
-      await this.bookService.deleteBook(id, req.user.id);
+      await this.bookService.deleteBook(id, user.id);
       res.status(204).send();
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   };
 
-  getUserBooks = async (req: AuthRequest, res: Response): Promise<void> => {
+  getUserBooks = async (req: Request, res: Response): Promise<void> => {
     try {
       if (!req.user) {
         res.status(401).json({ error: 'Authentication required' });
         return;
       }
 
-      const books = await this.bookService.getUserBooks(req.user.id);
+      const user = req.user as any;
+      const books = await this.bookService.getUserBooks(user.id);
       res.status(200).json(books);
     } catch (error: any) {
       res.status(500).json({ error: error.message });

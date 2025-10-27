@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { UserController } from '../controllers/userController';
-import { authenticateToken } from '../middleware/auth';
+import { authenticateJWT } from '../middleware/passportAuth';
 import { validate } from '../middleware/validation';
 import { 
   getUserSchema, 
@@ -12,11 +12,11 @@ import {
 const router = Router();
 const userController = new UserController();
 
-router.get('/', authenticateToken, userController.getAllUsers);
-router.get('/profile', authenticateToken, userController.getMyProfile);
-router.get('/:id', authenticateToken, validate(getUserSchema), userController.getUserById);
-router.put('/profile', authenticateToken, validate(updateProfileSchema), userController.updateProfile);
-router.post('/balance/top-up', authenticateToken, validate(topUpBalanceSchema), userController.topUpBalance);
-router.delete('/:id', authenticateToken, validate(deleteUserSchema), userController.deleteUser);
+router.get('/', authenticateJWT, userController.getAllUsers);
+router.get('/profile', authenticateJWT, userController.getMyProfile);
+router.get('/:id', authenticateJWT, validate(getUserSchema), userController.getUserById);
+router.put('/profile', authenticateJWT, validate(updateProfileSchema), userController.updateProfile);
+router.post('/balance/top-up', authenticateJWT, validate(topUpBalanceSchema), userController.topUpBalance);
+router.delete('/:id', authenticateJWT, validate(deleteUserSchema), userController.deleteUser);
 
 export default router;

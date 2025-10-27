@@ -1,58 +1,61 @@
-import { Response } from 'express';
-import { AuthRequest } from '../middleware/auth';
+import { Request, Response } from 'express';
 import { TradeService } from '../services/tradeService';
 
 export class TradeController {
   private tradeService = new TradeService();
 
-  getMyTrades = async (req: AuthRequest, res: Response): Promise<void> => {
+  getMyTrades = async (req: Request, res: Response): Promise<void> => {
     try {
       if (!req.user) {
         res.status(401).json({ error: 'Authentication required' });
         return;
       }
-      const trades = await this.tradeService.getUserTrades(req.user.id);
+      const authUser = req.user as any;
+      const trades = await this.tradeService.getUserTrades(authUser.id);
       res.status(200).json(trades);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   };
 
-  getIncomingTrades = async (req: AuthRequest, res: Response): Promise<void> => {
+  getIncomingTrades = async (req: Request, res: Response): Promise<void> => {
     try {
       if (!req.user) {
         res.status(401).json({ error: 'Authentication required' });
         return;
       }
-      const trades = await this.tradeService.getIncomingTrades(req.user.id);
+      const authUser = req.user as any;
+      const trades = await this.tradeService.getIncomingTrades(authUser.id);
       res.status(200).json(trades);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   };
 
-  getOutgoingTrades = async (req: AuthRequest, res: Response): Promise<void> => {
+  getOutgoingTrades = async (req: Request, res: Response): Promise<void> => {
     try {
       if (!req.user) {
         res.status(401).json({ error: 'Authentication required' });
         return;
       }
-      const trades = await this.tradeService.getOutgoingTrades(req.user.id);
+      const authUser = req.user as any;
+      const trades = await this.tradeService.getOutgoingTrades(authUser.id);
       res.status(200).json(trades);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   };
 
-  proposeTrade = async (req: AuthRequest, res: Response): Promise<void> => {
+  proposeTrade = async (req: Request, res: Response): Promise<void> => {
     try {
       if (!req.user) {
         res.status(401).json({ error: 'Authentication required' });
         return;
       }
+      const authUser = req.user as any;
       const { initiatorBookId, recipientBookId } = req.body;
       const trade = await this.tradeService.proposeTrade(
-        req.user.id,
+        authUser.id,
         initiatorBookId,
         recipientBookId
       );
@@ -62,29 +65,31 @@ export class TradeController {
     }
   };
 
-  respondToTrade = async (req: AuthRequest, res: Response): Promise<void> => {
+  respondToTrade = async (req: Request, res: Response): Promise<void> => {
     try {
       if (!req.user) {
         res.status(401).json({ error: 'Authentication required' });
         return;
       }
+      const authUser = req.user as any;
       const { id } = req.params;
       const { response } = req.body; // 'accepted' | 'rejected'
-      const result = await this.tradeService.respondToTrade(id, response, req.user.id);
+      const result = await this.tradeService.respondToTrade(id, response, authUser.id);
       res.status(200).json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   };
 
-  cancelTrade = async (req: AuthRequest, res: Response): Promise<void> => {
+  cancelTrade = async (req: Request, res: Response): Promise<void> => {
     try {
       if (!req.user) {
         res.status(401).json({ error: 'Authentication required' });
         return;
       }
+      const authUser = req.user as any;
       const { id } = req.params;
-      await this.tradeService.cancelTrade(id, req.user.id);
+      await this.tradeService.cancelTrade(id, authUser.id);
       res.status(204).send();
     } catch (error: any) {
       res.status(400).json({ error: error.message });

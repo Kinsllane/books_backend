@@ -37,7 +37,8 @@ class BookController {
                     res.status(401).json({ error: 'Authentication required' });
                     return;
                 }
-                const book = await this.bookService.createBook(req.body, req.user.id);
+                const user = req.user;
+                const book = await this.bookService.createBook(req.body, user.id);
                 res.status(201).json(book);
             }
             catch (error) {
@@ -50,8 +51,9 @@ class BookController {
                     res.status(401).json({ error: 'Authentication required' });
                     return;
                 }
+                const user = req.user;
                 const { id } = req.params;
-                const book = await this.bookService.updateBook(id, req.body, req.user.id);
+                const book = await this.bookService.updateBook(id, req.body, user.id);
                 res.status(200).json(book);
             }
             catch (error) {
@@ -64,8 +66,9 @@ class BookController {
                     res.status(401).json({ error: 'Authentication required' });
                     return;
                 }
+                const user = req.user;
                 const { id } = req.params;
-                await this.bookService.deleteBook(id, req.user.id);
+                await this.bookService.deleteBook(id, user.id);
                 res.status(204).send();
             }
             catch (error) {
@@ -78,7 +81,8 @@ class BookController {
                     res.status(401).json({ error: 'Authentication required' });
                     return;
                 }
-                const books = await this.bookService.getUserBooks(req.user.id);
+                const user = req.user;
+                const books = await this.bookService.getUserBooks(user.id);
                 res.status(200).json(books);
             }
             catch (error) {
