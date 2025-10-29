@@ -5,11 +5,13 @@ import morgan from 'morgan';
 import swaggerUi from 'swagger-ui-express';
 import { testConnection } from '../config/database';
 import sequelize from '../config/database';
+import { connectMongoDB } from '../config/mongodb';
 import userRoutes from './routes/userRoutes';
 import bookRoutes from './routes/bookRoutes';
 import authRoutes from './routes/authRoutes';
 import tradeRoutes from './routes/tradeRoutes';
 import swaggerSpec from './config/swagger';
+import { httpLogger } from './middleware/httpLogger';
 
 // Импорт моделей для синхронизации
 import '../models';
@@ -25,6 +27,9 @@ app.use(cors());
 app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// HTTP Logger - логирование всех HTTP запросов
+app.use(httpLogger);
 
 // Инициализация Passport
 app.use(passport.initialize());
@@ -91,6 +96,14 @@ const initializeAPI = async (): Promise<void> => {
     });
     
     console.log('✅ Database synced successfully');
+    
+    // Подключение к MongoDB для логирования
+    try {
+      await connectMongoDB();
+    } catch (error) {
+      console.log('⚠️ MongoDB connection failed, logging will be skipped');
+    }
+    
     console.log('✅ API server initialized successfully');
     
     await createTestData();

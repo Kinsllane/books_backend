@@ -11,11 +11,13 @@ const morgan_1 = __importDefault(require("morgan"));
 const swagger_ui_express_1 = __importDefault(require("swagger-ui-express"));
 const database_1 = require("../config/database");
 const database_2 = __importDefault(require("../config/database"));
+const mongodb_1 = require("../config/mongodb");
 const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
 const bookRoutes_1 = __importDefault(require("./routes/bookRoutes"));
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
 const tradeRoutes_1 = __importDefault(require("./routes/tradeRoutes"));
 const swagger_1 = __importDefault(require("./config/swagger"));
+const httpLogger_1 = require("./middleware/httpLogger");
 // Импорт моделей для синхронизации
 require("../models");
 // Импорт Passport
@@ -28,6 +30,8 @@ app.use((0, cors_1.default)());
 app.use((0, morgan_1.default)('combined'));
 app.use(express_1.default.json({ limit: '10mb' }));
 app.use(express_1.default.urlencoded({ extended: true }));
+// HTTP Logger - логирование всех HTTP запросов
+app.use(httpLogger_1.httpLogger);
 // Инициализация Passport
 app.use(passport_1.default.initialize());
 // Swagger documentation
@@ -84,6 +88,13 @@ const initializeAPI = async () => {
             alter: true
         });
         console.log('✅ Database synced successfully');
+        // Подключение к MongoDB для логирования
+        try {
+            await (0, mongodb_1.connectMongoDB)();
+        }
+        catch (error) {
+            console.log('⚠️ MongoDB connection failed, logging will be skipped');
+        }
         console.log('✅ API server initialized successfully');
         await createTestData();
     }
