@@ -46,7 +46,7 @@ BookTrade.init({
         }
     },
     status: {
-        type: sequelize_1.DataTypes.ENUM('pending', 'accepted', 'rejected', 'cancelled'),
+        type: sequelize_1.DataTypes.ENUM('pending', 'accepted', 'rejected', 'completed', 'cancelled'),
         allowNull: false,
         defaultValue: 'pending'
     }
@@ -64,7 +64,33 @@ BookTrade.init({
         },
         {
             fields: ['status']
+        },
+        {
+            // Составной индекс для поиска активных обменов
+            fields: ['status', 'createdAt']
+        },
+        {
+            // Индекс для быстрого поиска обменов по участникам и статусу
+            fields: ['initiatorId', 'status']
+        },
+        {
+            // Индекс для быстрого поиска обменов конкретного получателя
+            fields: ['recipientId', 'status']
         }
-    ]
+    ],
+    validate: {
+        // CHECK constraint: Инициатор и получатель должны быть разными
+        differentUsers() {
+            if (this.initiatorId === this.recipientId) {
+                throw new Error('Нельзя инициировать обмен с самим собой');
+            }
+        },
+        // CHECK constraint: Книги должны быть разными
+        differentBooks() {
+            if (this.initiatorBookId === this.recipientBookId) {
+                throw new Error('Нельзя обменять книгу на саму себя');
+            }
+        }
+    }
 });
 exports.default = BookTrade;

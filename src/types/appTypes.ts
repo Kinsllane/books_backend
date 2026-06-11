@@ -69,7 +69,7 @@ export interface BookEntry {
     author: string;
     description: string;
     coverImageUrl: string;
-    currentOwner: UserProfile;
+    currentOwner: Pick<UserProfile, 'id' | 'name'>;
     isForSale: boolean;
     isForTrade: boolean;
     priceValue?: number;
@@ -81,9 +81,9 @@ export interface BookEntry {
 
 export interface BookTrade {
     id: string;
-    initiator: UserProfile;
-    initiatorBook: BookEntry;
-    recipient: UserProfile;
-    recipientBook: BookEntry;
+    initiator: Pick<UserProfile, 'id' | 'name'>;
+    initiatorBook: Pick<BookEntry, 'id' | 'title' | 'coverImageUrl'>;
+    recipient: Pick<UserProfile, 'id' | 'name'>;
+    recipientBook: Pick<BookEntry, 'id' | 'title' | 'coverImageUrl'>;
     status: 'pending' | 'accepted' | 'rejected' | 'cancelled';
 }

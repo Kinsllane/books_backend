@@ -8,6 +8,7 @@ const sequelize_1 = require("sequelize");
 const BookTrade_1 = __importDefault(require("../../models/BookTrade"));
 const Book_1 = __importDefault(require("../../models/Book"));
 const User_1 = __importDefault(require("../../models/User"));
+const database_1 = __importDefault(require("../../config/database"));
 class TradeRepository {
     async findAll() {
         return await BookTrade_1.default.findAll({
@@ -235,6 +236,43 @@ class TradeRepository {
             }
         });
         return !!existingTrade;
+    }
+    /**
+     * Завершение обмена с транзакционной защитой
+     * Использует SERIALIZABLE isolation level для предотвращения deadlock
+     */
+    async completeTradeWithTransaction(tradeId) {
+        return await database_1.default.transaction({
+            isolationLevel: sequelize_1.Transaction.ISOLATION_LEVELS.SERIALIZABLE
+        }, async (t) => {
+            const trade = await BookTrade_1.default.findByPk(tradeId, {
+                lock: true, // Блокируем строку
+                transaction: t
+            });
+            if (!trade || trade.status !== 'pending') {
+                throw new Error('Trade not found or not pending');
+            }
+            // Получаем книги с блокировкой
+            const initiatorBook = await Book_1.default.findByPk(trade.initiatorBookId, {
+                lock: true,
+                transaction: t
+            });
+            const recipientBook = await Book_1.default.findByPk(trade.recipientBookId, {
+                lock: true,
+                transaction: t
+            });
+            if (!initiatorBook || !recipientBook) {
+                throw new Error('One or both books not found');
+            }
+            // Меняем владельцев в транзакции
+            const initiatorOwnerId = initiatorBook.currentOwnerId;
+            const recipientOwnerId = recipientBook.currentOwnerId;
+            await Book_1.default.update({ currentOwnerId: recipientOwnerId }, { where: { id: trade.initiatorBookId }, transaction: t });
+            await Book_1.default.update({ currentOwnerId: initiatorOwnerId }, { where: { id: trade.recipientBookId }, transaction: t });
+            // Обновляем статус обмена
+            await trade.update({ status: 'completed' }, { transaction: t });
+            return await BookTrade_1.default.findByPk(tradeId, { transaction: t });
+        });
     }
 }
 exports.TradeRepository = TradeRepository;

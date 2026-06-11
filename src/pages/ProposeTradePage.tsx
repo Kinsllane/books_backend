@@ -1,47 +1,52 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuthStatus } from '../hooks/useAuthStatus'; 
-import {
-    retrieveBookById,
-    createNewTradeProposal, 
-    availableBooks 
-} from '../data/appData'; 
-import type { BookEntry } from '../types/appTypes'; 
+import api from '../services/api';
 
 const ProposeTradePage: React.FC = () => {
     const { bookId: targetBookId } = useParams<{ bookId: string }>(); 
     const navigate = useNavigate();
     const { activeUser } = useAuthStatus(); 
 
-    const [targetBook, setTargetBook] = useState<BookEntry | null>(null); 
-    const [myTradableBooks, setMyTradableBooks] = useState<BookEntry[]>([]); 
+    const [targetBook, setTargetBook] = useState<any>(null); 
+    const [myTradableBooks, setMyTradableBooks] = useState<any[]>([]); 
     const [selectedMyBookId, setSelectedMyBookId] = useState<string>(''); 
     const [errorMessage, setErrorMessage] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
-
-    const getBooksByOwnerId = (ownerId: string): BookEntry[] => {
-        return availableBooks.filter(book => book.currentOwner.id === ownerId);
-    };
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        const foundTargetBook = retrieveBookById(targetBookId); 
-        if (foundTargetBook) {
-            setTargetBook(foundTargetBook);
-        } else {
-            setErrorMessage('Целевая книга для обмена не найдена.');
-            return;
-        }
-
-        if (activeUser) {
-            const userBooks = getBooksByOwnerId(activeUser.id).filter((book: BookEntry) => book.isForTrade); 
-            setMyTradableBooks(userBooks);
-            if (userBooks.length > 0) {
-                setSelectedMyBookId(userBooks[0].id);
+        const fetchData = async () => {
+            if (!targetBookId) {
+                setErrorMessage('ID книги не указан');
+                setIsLoading(false);
+                return;
             }
-        }
-    }, [targetBookId, activeUser, availableBooks]); 
 
-    const handleSubmit = (e: React.FormEvent) => {
+            try {
+                // Получаем целевую книгу
+                const book = await api.getBookById(targetBookId);
+                setTargetBook(book);
+
+                // Получаем свои книги
+                const myBooks = await api.getMyBooks();
+                const tradable = myBooks.filter((b: any) => b.isForTrade);
+                setMyTradableBooks(tradable);
+
+                if (tradable.length > 0) {
+                    setSelectedMyBookId(tradable[0].id);
+                }
+            } catch (err: any) {
+                setErrorMessage(err.message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchData();
+    }, [targetBookId, activeUser]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setErrorMessage('');
         setSuccessMessage('');
@@ -61,18 +66,21 @@ const ProposeTradePage: React.FC = () => {
             return;
         }
 
-        const result = createNewTradeProposal(activeUser.id, selectedMyBookId, targetBookId);
-
-        if (result.success) {
-            setSuccessMessage(result.message + ' Вы будете перенаправлены на главную страницу.');
+        try {
+            await api.proposeTrade(selectedMyBookId, targetBookId);
+            setSuccessMessage('Предложение обмена отправлено! Вы будете перенаправлены на главную страницу.');
             setTimeout(() => navigate('/'), 3000);
-        } else {
-            setErrorMessage(result.message);
+        } catch (err: any) {
+            setErrorMessage(err.message);
         }
     };
 
+    if (isLoading) {
+        return <div className="page-message">Загрузка...</div>;
+    }
+
     if (!targetBook) {
-        return <div className="page-message">Загрузка или книга не найдена...</div>;
+        return <div className="page-message">Книга не найдена.</div>;
     }
 
     if (myTradableBooks.length === 0) {
@@ -80,7 +88,7 @@ const ProposeTradePage: React.FC = () => {
             <div className="form-container">
                 <h2 className="form-title">Предложение обмена</h2>
                 <p className="info-message">У вас нет книг, доступных для обмена.</p>
-                <p className="info-message">Вы можете <Link to="/add-book" className="link-text">добавить книгу</Link> и пометить ее как доступную для обмена.</p>
+                <p className="info-message">Вы можете <Link to="/add-book" className="link-text">добавить книгу</Link> и пометить её как доступную для обмена.</p>
             </div>
         );
     }
@@ -100,9 +108,9 @@ const ProposeTradePage: React.FC = () => {
                         required
                         aria-label="Моя книга для обмена"
                     >
-                        {myTradableBooks.map((book: BookEntry) => ( 
+                        {myTradableBooks.map((book) => ( 
                             <option key={book.id} value={book.id}>
-                                {book.title}
+                                {book.title} - {book.author}
                             </option>
                         ))}
                     </select>
@@ -111,7 +119,9 @@ const ProposeTradePage: React.FC = () => {
                 {errorMessage && <p className="error-message">{errorMessage}</p>}
                 {successMessage && <p className="success-message">{successMessage}</p>}
 
-                <button type="submit" className="submit-button" disabled={!!successMessage}>Отправить предложение</button>
+                <button type="submit" className="submit-button" disabled={!!successMessage}>
+                    Отправить предложение
+                </button>
             </form>
         </div>
     );

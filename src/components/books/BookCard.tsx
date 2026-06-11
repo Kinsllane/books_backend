@@ -9,9 +9,10 @@ interface BookCardProps {
 }
 
 const BookCard: React.FC<BookCardProps> = ({ book }) => {
-    const coverPath = book.coverImageUrl.startsWith('http') || book.coverImageUrl.startsWith('data:image/')
-        ? book.coverImageUrl    
-        : `/${book.coverImageUrl}`;
+    const coverPath = !book.coverImageUrl ? '/book-cover-default.png' :
+        book.coverImageUrl.startsWith('http') || book.coverImageUrl.startsWith('data:image/')
+            ? book.coverImageUrl    
+            : `/${book.coverImageUrl}`;
     return (
         <Link to={`/book/${book.id}`} className="book-card">
             <img src={coverPath} alt={`Обложка книги ${book.title}`} className="book-card-cover" />

@@ -11,7 +11,7 @@ const morgan_1 = __importDefault(require("morgan"));
 const swagger_ui_express_1 = __importDefault(require("swagger-ui-express"));
 const database_1 = require("../config/database");
 const database_2 = __importDefault(require("../config/database"));
-const mongodb_1 = require("../config/mongodb");
+const databaseMigrations_1 = require("../config/databaseMigrations");
 const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
 const bookRoutes_1 = __importDefault(require("./routes/bookRoutes"));
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
@@ -88,12 +88,12 @@ const initializeAPI = async () => {
             alter: true
         });
         console.log('✅ Database synced successfully');
-        // Подключение к MongoDB для логирования
+        // Запускаем миграции после sync (Views должны создаваться после создания таблиц)
         try {
-            await (0, mongodb_1.connectMongoDB)();
+            await (0, databaseMigrations_1.runMigrations)();
         }
         catch (error) {
-            console.log('⚠️ MongoDB connection failed, logging will be skipped');
+            console.log('⚠️ Миграции пропущены (возможно Views уже существуют)');
         }
         console.log('✅ API server initialized successfully');
         await createTestData();

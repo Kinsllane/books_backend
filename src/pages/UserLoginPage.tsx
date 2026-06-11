@@ -6,19 +6,27 @@ const UserLoginPage: React.FC = () => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState(''); 
     const [errorMessage, setErrorMessage] = useState(''); 
+    const [isLoading, setIsLoading] = useState(false);
     
     const { signIn } = useAuthStatus(); 
     const navigate = useNavigate();
 
-    const handleLoginSubmit = (e: React.FormEvent) => {
+    const handleLoginSubmit = async (e: React.FormEvent) => {
         e.preventDefault(); 
         setErrorMessage(''); 
+        setIsLoading(true);
 
-        const user = signIn(username, password); 
-        if (user) {
-            navigate('/'); 
-        } else {
-            setErrorMessage('Неверное имя пользователя или пароль. Пожалуйста, попробуйте снова.'); 
+        try {
+            const user = await signIn(username, password); 
+            if (user) {
+                navigate('/'); 
+            } else {
+                setErrorMessage('Неверное имя пользователя или пароль. Пожалуйста, попробуйте снова.');
+            }
+        } catch (error: any) {
+            setErrorMessage(error.message || 'Неверное имя пользователя или пароль. Пожалуйста, попробуйте снова.'); 
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -37,6 +45,7 @@ const UserLoginPage: React.FC = () => {
                         onChange={(e) => setUsername(e.target.value)} 
                         required 
                         aria-label="Имя пользователя"
+                        disabled={isLoading}
                     />
                 </div>
                 
@@ -49,10 +58,13 @@ const UserLoginPage: React.FC = () => {
                         onChange={(e) => setPassword(e.target.value)} 
                         required 
                         aria-label="Пароль"
+                        disabled={isLoading}
                     />
                 </div>
                 
-                <button type="submit" className="submit-button">Войти</button>
+                <button type="submit" className="submit-button" disabled={isLoading}>
+                    {isLoading ? 'Вход...' : 'Войти'}
+                </button>
             </form>
             
             <p className="form-footer-text">

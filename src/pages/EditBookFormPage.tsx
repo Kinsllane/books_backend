@@ -1,9 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuthStatus } from '../hooks/useAuthStatus';
-import { retrieveBookById, updateBook } from '../data/appData';
-import type { BookEntry } from '../types/appTypes';
-import { ALL_BOOK_GENRES, BookGenre } from '../types/appTypes'; // Импортируем жанры
+import api from '../services/api';
+import { ALL_BOOK_GENRES, BookGenre } from '../types/appTypes';
+
+// Предопределённые обложки для книг
+const BOOK_COVERS = [
+  '/book-cover-1.png',
+  '/book-cover-2.png', 
+  '/book-cover-3.png',
+  '/book-cover-4.png',
+  '/book-cover-5.png',
+];
 
 const EditBookFormPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -18,64 +26,62 @@ const EditBookFormPage: React.FC = () => {
     const [priceValue, setPriceValue] = useState('');
     const [isForTrade, setIsForTrade] = useState(false);
     const [publicationYear, setPublicationYear] = useState('');
-    const [genre, setGenre] = useState<BookGenre>(ALL_BOOK_GENRES[0]); // <-- НОВОЕ СОСТОЯНИЕ
+    const [genre, setGenre] = useState<BookGenre>(ALL_BOOK_GENRES[0]);
     const [loading, setLoading] = useState(true);
     const [bookNotFound, setBookNotFound] = useState(false);
+    const [error, setError] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
 
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [selectedCover, setSelectedCover] = useState<string>(BOOK_COVERS[0]);
 
     useEffect(() => {
-        if (!activeUser) {
-            alert('Необходимо войти в систему для редактирования книги.');
-            navigate('/login');
-            return;
-        }
+        const fetchBook = async () => {
+            if (!activeUser) {
+                alert('Необходимо войти в систему для редактирования книги.');
+                navigate('/login');
+                return;
+            }
 
-        if (id) {
-            const bookToEdit = retrieveBookById(id);
-            if (bookToEdit) {
-                if (bookToEdit.currentOwner.id !== activeUser.id && activeUser.role !== 'admin') {
-                    alert('У вас нет прав для редактирования этой книги.');
-                    navigate('/');
-                    return;
+            if (id) {
+                try {
+                    const book = await api.getBookById(id);
+                    
+                    if (book.currentOwnerId !== activeUser.id && activeUser.role !== 'admin') {
+                        alert('У вас нет прав для редактирования этой книги.');
+                        navigate('/');
+                        return;
+                    }
+
+                    setTitle(book.title);
+                    setAuthor(book.author);
+                    setDescription(book.description);
+                    setSelectedCover(book.coverImageUrl || BOOK_COVERS[0]);
+                    setIsForSale(book.isForSale);
+                    setPriceValue(book.priceValue ? String(book.priceValue) : '');
+                    setIsForTrade(book.isForTrade);
+                    setPublicationYear(String(book.publicationYear));
+                    setGenre(book.genre || ALL_BOOK_GENRES[0]);
+                    setLoading(false);
+                } catch (err) {
+                    setBookNotFound(true);
+                    setLoading(false);
                 }
-
-                setTitle(bookToEdit.title);
-                setAuthor(bookToEdit.author);
-                setDescription(bookToEdit.description);
-                setCoverImageUrl(bookToEdit.coverImageUrl);
-                setIsForSale(bookToEdit.isForSale);
-                setPriceValue(bookToEdit.priceValue ? String(bookToEdit.priceValue) : '');
-                setIsForTrade(bookToEdit.isForTrade);
-                setPublicationYear(String(bookToEdit.publicationYear));
-                setGenre(bookToEdit.genre); // <-- УСТАНАВЛИВАЕМ ЖАНР
-                setLoading(false);
             } else {
                 setBookNotFound(true);
                 setLoading(false);
             }
-        } else {
-            setBookNotFound(true);
-            setLoading(false);
-        }
+        };
+
+        fetchBook();
     }, [id, activeUser, navigate]);
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            setSelectedFile(file);
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setCoverImageUrl(reader.result as string);
-            };
-            reader.readAsDataURL(file);
-        } else {
-            setSelectedFile(null);
-        }
+    const handleCoverSelect = (coverUrl: string) => {
+        setSelectedCover(coverUrl);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError('');
 
         if (!activeUser || !id) {
             alert('Ошибка: Пользователь не авторизован или ID книги отсутствует.');
@@ -83,34 +89,40 @@ const EditBookFormPage: React.FC = () => {
         }
 
         if (isForSale && (!priceValue || Number(priceValue) <= 0)) {
-            alert('Пожалуйста, укажите корректную цену для продажи (больше 0).');
+            setError('Пожалуйста, укажите корректную цену для продажи (больше 0).');
+            return;
+        }
+
+        if (!isForSale && !isForTrade) {
+            setError('Выберите хотя бы один вариант: продажа или обмен.');
             return;
         }
 
         if (!publicationYear || Number(publicationYear) <= 0) {
-            alert('Пожалуйста, укажите корректный год публикации (больше 0).');
+            setError('Пожалуйста, укажите корректный год публикации.');
             return;
         }
 
-        const updatedBookData = {
-            title,
-            author,
-            description,
-            coverImageUrl: coverImageUrl || '/book-cover-default.png',
-            isForSale,
-            priceValue: isForSale ? Number(priceValue) : undefined,
-            isForTrade,
-            publicationYear: Number(publicationYear),
-            genre, // <-- ДОБАВЛЯЕМ ЖАНР
-        };
+        setIsSaving(true);
+        try {
+            await api.updateBook(id, {
+                title,
+                author,
+                description,
+                coverImageUrl: selectedCover,
+                isForSale,
+                priceValue: isForSale ? Number(priceValue) : undefined,
+                isForTrade,
+                publicationYear: Number(publicationYear),
+                genre,
+            });
 
-        const result = updateBook(id, updatedBookData, activeUser.id);
-
-        if (result.success) {
             alert('Информация о книге успешно обновлена!');
             navigate(`/book/${id}`);
-        } else {
-            alert(`Ошибка обновления: ${result.message}`);
+        } catch (err: any) {
+            setError(err.message || 'Ошибка при обновлении книги');
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -126,6 +138,8 @@ const EditBookFormPage: React.FC = () => {
         <div className="form-container">
             <h2 className="form-title">Редактировать книгу</h2>
             <form onSubmit={handleSubmit} className="add-book-form">
+                {error && <p className="error-message">{error}</p>}
+
                 <div className="form-group">
                     <label htmlFor="title">Название:</label>
                     <input
@@ -135,6 +149,7 @@ const EditBookFormPage: React.FC = () => {
                         onChange={(e) => setTitle(e.target.value)}
                         required
                         aria-label="Название книги"
+                        disabled={isSaving}
                     />
                 </div>
 
@@ -147,6 +162,7 @@ const EditBookFormPage: React.FC = () => {
                         onChange={(e) => setAuthor(e.target.value)}
                         required
                         aria-label="Автор книги"
+                        disabled={isSaving}
                     />
                 </div>
 
@@ -159,19 +175,33 @@ const EditBookFormPage: React.FC = () => {
                         required
                         rows={6}
                         aria-label="Описание книги"
+                        disabled={isSaving}
                     />
                 </div>
 
                 <div className="form-group">
-                    <label htmlFor="coverFile">Загрузить обложку (файл):</label>
-                    <input
-                        type="file"
-                        id="coverFile"
-                        accept="image/*"
-                        onChange={handleFileChange}
-                        aria-label="Загрузить файл обложки"
-                    />
-                    {selectedFile && <p className="info-message">Выбран файл: {selectedFile.name}</p>}
+                    <label>Обложка книги:</label>
+                    <div className="cover-selection-grid" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '10px' }}>
+                        {BOOK_COVERS.map((cover, index) => (
+                            <div 
+                                key={index}
+                                onClick={() => handleCoverSelect(cover)}
+                                style={{ 
+                                    cursor: 'pointer',
+                                    border: selectedCover === cover ? '3px solid #4CAF50' : '2px solid #ddd',
+                                    borderRadius: '8px',
+                                    padding: '5px',
+                                    transition: 'all 0.2s ease'
+                                }}
+                            >
+                                <img 
+                                    src={cover} 
+                                    alt={`Обложка ${index + 1}`} 
+                                    style={{ width: '80px', height: '100px', objectFit: 'cover', borderRadius: '4px' }} 
+                                />
+                            </div>
+                        ))}
+                    </div>
                 </div>
 
                 <div className="form-group">
@@ -185,10 +215,10 @@ const EditBookFormPage: React.FC = () => {
                         min="1"
                         max={new Date().getFullYear()}
                         aria-label="Год публикации книги"
+                        disabled={isSaving}
                     />
                 </div>
 
-                {/* НОВОЕ ПОЛЕ: Жанр */}
                 <div className="form-group">
                     <label htmlFor="genre">Жанр:</label>
                     <select
@@ -197,6 +227,7 @@ const EditBookFormPage: React.FC = () => {
                         onChange={(e) => setGenre(e.target.value as BookGenre)}
                         required
                         aria-label="Жанр книги"
+                        disabled={isSaving}
                     >
                         {ALL_BOOK_GENRES.map((g) => (
                             <option key={g} value={g}>
@@ -216,6 +247,7 @@ const EditBookFormPage: React.FC = () => {
                             checked={isForSale}
                             onChange={(e) => setIsForSale(e.target.checked)}
                             aria-label="Выставить на продажу"
+                            disabled={isSaving}
                         />
                         <label htmlFor="isForSale">Выставить на продажу</label>
                     </div>
@@ -231,6 +263,7 @@ const EditBookFormPage: React.FC = () => {
                                 required={isForSale}
                                 min="1"
                                 aria-label="Цена книги"
+                                disabled={isSaving}
                             />
                         </div>
                     )}
@@ -242,13 +275,14 @@ const EditBookFormPage: React.FC = () => {
                             checked={isForTrade}
                             onChange={(e) => setIsForTrade(e.target.checked)}
                             aria-label="Выставить на обмен"
+                            disabled={isSaving}
                         />
                         <label htmlFor="isForTrade">Выставить на обмен</label>
                     </div>
                 </div>
 
-                <button type="submit" className="submit-button">
-                    Сохранить изменения
+                <button type="submit" className="submit-button" disabled={isSaving}>
+                    {isSaving ? 'Сохранение...' : 'Сохранить изменения'}
                 </button>
             </form>
         </div>

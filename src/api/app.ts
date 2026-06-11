@@ -5,7 +5,7 @@ import morgan from 'morgan';
 import swaggerUi from 'swagger-ui-express';
 import { testConnection } from '../config/database';
 import sequelize from '../config/database';
-import { connectMongoDB } from '../config/mongodb';
+import { runMigrations } from '../config/databaseMigrations';
 import userRoutes from './routes/userRoutes';
 import bookRoutes from './routes/bookRoutes';
 import authRoutes from './routes/authRoutes';
@@ -90,6 +90,28 @@ const initializeAPI = async (): Promise<void> => {
   try {
     await testConnection();
     
+    // Сначала удаляем ВСЕ Views, Materialized Views и Triggers чтобы разблокировать таблицы для ALTER
+    const queryInterface = sequelize.getQueryInterface();
+    try {
+      // Удаляем Views
+      await queryInterface.sequelize.query(`DROP VIEW IF EXISTS user_activity_summary CASCADE;`);
+      await queryInterface.sequelize.query(`DROP VIEW IF EXISTS book_engagement_analytics CASCADE;`);
+      await queryInterface.sequelize.query(`DROP VIEW IF EXISTS daily_transaction_report CASCADE;`);
+      await queryInterface.sequelize.query(`DROP VIEW IF EXISTS genre_statistics CASCADE;`);
+      await queryInterface.sequelize.query(`DROP VIEW IF EXISTS trade_analytics CASCADE;`);
+      
+      // Удаляем Materialized Views
+      await queryInterface.sequelize.query(`DROP MATERIALIZED VIEW IF EXISTS mv_genre_statistics CASCADE;`);
+      
+      // Удаляем триггеры
+      await queryInterface.sequelize.query(`DROP TRIGGER IF EXISTS tr_transaction_complete ON transactions;`);
+      await queryInterface.sequelize.query(`DROP FUNCTION IF EXISTS update_user_balance();`);
+      
+      console.log('✅ Views, Materialized Views and Triggers dropped for schema sync');
+    } catch (err) {
+      console.log('⚠️ Drop skipped');
+    }
+    
     await sequelize.sync({ 
       force: false,
       alter: true
@@ -97,11 +119,11 @@ const initializeAPI = async (): Promise<void> => {
     
     console.log('✅ Database synced successfully');
     
-    // Подключение к MongoDB для логирования
+    // Запускаем миграции после sync (Views должны создаваться после создания таблиц)
     try {
-      await connectMongoDB();
+      await runMigrations();
     } catch (error) {
-      console.log('⚠️ MongoDB connection failed, logging will be skipped');
+      console.log('⚠️ Миграции пропущены (возможно Views уже существуют)');
     }
     
     console.log('✅ API server initialized successfully');

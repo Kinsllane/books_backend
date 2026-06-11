@@ -1,11 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import HttpLog from '../../models/logs/HttpLog';
 
-export const httpLogger = async (
+export const httpLogger = (
   req: Request,
   res: Response,
   next: NextFunction
-): Promise<void> => {
+): void => {
   const startTime = Date.now();
   
   // Сохраняем оригинальный метод res.json и res.end
@@ -34,36 +33,20 @@ export const httpLogger = async (
     return originalEnd(chunk);
   };
   
-  res.on('finish', async () => {
+  res.on('finish', () => {
     const responseTime = Date.now() - startTime;
     
-    try {
-      // Получаем IP адрес
-      const ip = req.ip || req.connection.remoteAddress || 'unknown';
-      
-      // Получаем userId из запроса (если есть)
-      const userId = req.user ? (req.user as any).id : undefined;
-      
-      // Логируем в MongoDB
-      await HttpLog.create({
-        method: req.method,
-        url: req.originalUrl || req.url,
-        statusCode: res.statusCode,
-        responseTime,
-        ip: ip.toString(),
-        userAgent: req.get('user-agent'),
-        userId,
-        requestBody,
-        responseBody,
-        error: res.statusCode >= 400 ? 'HTTP Error' : undefined,
-        timestamp: new Date()
-      });
-    } catch (error) {
-      // Не прерываем выполнение при ошибке логирования
-      console.error('Failed to log HTTP request:', error);
+    // Логируем в консоль
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+    const userId = req.user ? (req.user as any).id : '-';
+    const logMessage = `[HTTP] ${req.method} ${req.originalUrl} ${res.statusCode} ${responseTime}ms | IP: ${ip} | User: ${userId}`;
+    
+    if (res.statusCode >= 400) {
+      console.warn(logMessage);
+    } else {
+      console.log(logMessage);
     }
   });
   
   next();
 };
-

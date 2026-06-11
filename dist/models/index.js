@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BookTrade = exports.BookQuote = exports.BookReview = exports.Book = exports.User = exports.sequelize = void 0;
+exports.Transaction = exports.BookTrade = exports.BookQuote = exports.BookReview = exports.Book = exports.User = exports.sequelize = void 0;
 const database_1 = __importDefault(require("../config/database"));
 exports.sequelize = database_1.default;
 const User_1 = __importDefault(require("./User"));
@@ -16,6 +16,8 @@ const BookQuote_1 = __importDefault(require("./BookQuote"));
 exports.BookQuote = BookQuote_1.default;
 const BookTrade_1 = __importDefault(require("./BookTrade"));
 exports.BookTrade = BookTrade_1.default;
+const Transaction_1 = __importDefault(require("./Transaction"));
+exports.Transaction = Transaction_1.default;
 // Ассоциации User - Book (One-to-Many)
 User_1.default.hasMany(Book_1.default, {
     foreignKey: 'currentOwnerId',
@@ -93,4 +95,29 @@ Book_1.default.hasMany(BookTrade_1.default, {
 BookTrade_1.default.belongsTo(Book_1.default, {
     foreignKey: 'recipientBookId',
     as: 'recipientBook'
+});
+// Ассоциации для Transaction (One-to-Many)
+User_1.default.hasMany(Transaction_1.default, {
+    foreignKey: 'fromUserId',
+    as: 'sentTransactions'
+});
+Transaction_1.default.belongsTo(User_1.default, {
+    foreignKey: 'fromUserId',
+    as: 'fromUser'
+});
+User_1.default.hasMany(Transaction_1.default, {
+    foreignKey: 'toUserId',
+    as: 'receivedTransactions'
+});
+Transaction_1.default.belongsTo(User_1.default, {
+    foreignKey: 'toUserId',
+    as: 'toUser'
+});
+Book_1.default.hasMany(Transaction_1.default, {
+    foreignKey: 'bookId',
+    as: 'transactions'
+});
+Transaction_1.default.belongsTo(Book_1.default, {
+    foreignKey: 'bookId',
+    as: 'book'
 });

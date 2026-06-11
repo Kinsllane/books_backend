@@ -1,7 +1,8 @@
-import { Op } from 'sequelize';
+import { Op, Transaction } from 'sequelize';
 import BookTrade from '../../models/BookTrade';
 import Book from '../../models/Book';
 import User from '../../models/User';
+import sequelize from '../../config/database';
 
 export class TradeRepository {
   async findAll(): Promise<BookTrade[]> {
@@ -243,5 +244,58 @@ export class TradeRepository {
     });
 
     return !!existingTrade;
+  }
+
+  /**
+   * Завершение обмена с транзакционной защитой
+   * Использует SERIALIZABLE isolation level для предотвращения deadlock
+   */
+  async completeTradeWithTransaction(tradeId: string): Promise<BookTrade | null> {
+    return await sequelize.transaction({
+      isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE
+    }, async (t) => {
+      const trade = await BookTrade.findByPk(tradeId, {
+        lock: true, // Блокируем строку
+        transaction: t
+      });
+
+      if (!trade || trade.status !== 'pending') {
+        throw new Error('Trade not found or not pending');
+      }
+
+      // Получаем книги с блокировкой
+      const initiatorBook = await Book.findByPk(trade.initiatorBookId, {
+        lock: true,
+        transaction: t
+      });
+
+      const recipientBook = await Book.findByPk(trade.recipientBookId, {
+        lock: true,
+        transaction: t
+      });
+
+      if (!initiatorBook || !recipientBook) {
+        throw new Error('One or both books not found');
+      }
+
+      // Меняем владельцев в транзакции
+      const initiatorOwnerId = initiatorBook.currentOwnerId;
+      const recipientOwnerId = recipientBook.currentOwnerId;
+
+      await Book.update(
+        { currentOwnerId: recipientOwnerId },
+        { where: { id: trade.initiatorBookId }, transaction: t }
+      );
+
+      await Book.update(
+        { currentOwnerId: initiatorOwnerId },
+        { where: { id: trade.recipientBookId }, transaction: t }
+      );
+
+      // Обновляем статус обмена
+      await trade.update({ status: 'completed' }, { transaction: t });
+
+      return await BookTrade.findByPk(tradeId, { transaction: t });
+    });
   }
 }

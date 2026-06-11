@@ -2,14 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom'; 
 import { useAuthStatus } from '../hooks/useAuthStatus';
 import BookCard from '../components/books/BookCard';
-import {
-    availableBooks,
-    activeTrades,
-    findUserById,
-    respondToTradeProposal,
-    deleteBook,
-    updateUserProfile
-} from '../data/appData';
+import api from '../services/api';
 import type { BookEntry, BookTrade, UserProfile } from '../types/appTypes';
 
 const UserProfilePage: React.FC = () => {
@@ -27,52 +20,103 @@ const UserProfilePage: React.FC = () => {
     const [topUpAmount, setTopUpAmount] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
+    const [isLoading, setIsLoading] = useState(true);
 
     const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [newBio, setNewBio] = useState(''); 
     const [newAvatarDataUrl, setNewAvatarDataUrl] = useState<string | null>(null);
     const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
 
-
-    const getBooksByOwnerId = (ownerId: string): BookEntry[] => {
-        return availableBooks.filter(book => book.currentOwner.id === ownerId);
-    };
-
-    const getTradeOffersForUser = (userId: string): { incoming: BookTrade[], outgoing: BookTrade[] } => {
-        const incoming = activeTrades.filter(trade => trade.recipient.id === userId && trade.status === 'pending');
-        const outgoing = activeTrades.filter(trade => trade.initiator.id === userId && trade.status === 'pending');
-        return { incoming, outgoing };
-    };
-
     useEffect(() => {
-        if (!displayUserId) {
-            if (!activeUser) {
-                navigate('/login');
+        const fetchData = async () => {
+            if (!displayUserId) {
+                if (!activeUser) {
+                    navigate('/login');
+                }
+                return;
             }
-            return;
-        }
-        const userToDisplay = findUserById(displayUserId);
-        if (!userToDisplay) {
-            setErrorMessage('Пользователь не найден.');
-            setDisplayUser(null);
-            return;
-        }
-        setDisplayUser(userToDisplay);
-        setDisplayUserBooks(getBooksByOwnerId(userToDisplay.id));
-        if (isMyProfile && activeUser) {
-            const { incoming, outgoing } = getTradeOffersForUser(activeUser.id);
-            setIncomingTrades(incoming);
-            setOutgoingTrades(outgoing);
-            setNewBio(activeUser.bio || '' );
-            setNewAvatarDataUrl(activeUser.avatarUrl || null);
-        } else {
-            setIncomingTrades([]);
-            setOutgoingTrades([]);
-        }
-        setErrorMessage('');
-        setSuccessMessage('');
-        setIsEditingProfile(false); 
-    }, [displayUserId, activeUser, navigate, availableBooks, activeTrades, isMyProfile]); 
+
+            setIsLoading(true);
+            try {
+                // Получаем данные пользователя
+                const user = await api.getUserById(displayUserId);
+                const userProfile: UserProfile = {
+                    id: user.id,
+                    name: user.name,
+                    balance: typeof user.balance === 'string' ? parseFloat(user.balance) : user.balance,
+                    registrationDate: user.registrationDate,
+                    role: user.role,
+                    avatarUrl: user.avatarUrl,
+                    bio: user.bio,
+                };
+                setDisplayUser(userProfile);
+
+                // Получаем книги пользователя
+                const books = await api.getBooks({ search: '' });
+                const userBooks: BookEntry[] = books
+                    .filter((b: any) => b.currentOwnerId === displayUserId)
+                    .map((book: any) => ({
+                        id: book.id,
+                        title: book.title,
+                        author: book.author,
+                        description: book.description,
+                        coverImageUrl: book.coverImageUrl,
+                        currentOwner: {
+                            id: book.currentOwnerId,
+                            name: userProfile.name,
+                        },
+                        isForSale: book.isForSale,
+                        isForTrade: book.isForTrade,
+                        priceValue: book.priceValue ? parseFloat(book.priceValue) : undefined,
+                        publicationYear: book.publicationYear,
+                        genre: book.genre,
+                        reviews: book.reviews || [],
+                        quotes: book.quotes || [],
+                    }));
+                setDisplayUserBooks(userBooks);
+
+                // Для своего профиля получаем обмены
+                if (isMyProfile && activeUser) {
+                    try {
+                        const incoming = await api.getIncomingTrades();
+                        const outgoing = await api.getOutgoingTrades();
+                        
+                        // Форматируем обмены
+                        const formatTrades = (trades: any[]): BookTrade[] => trades.map(t => ({
+                            id: t.id,
+                            initiator: { id: t.initiatorId, name: t.initiator?.name || '' },
+                            initiatorBook: { 
+                                id: t.initiatorBookId, 
+                                title: t.initiatorBook?.title || '',
+                                coverImageUrl: t.initiatorBook?.coverImageUrl || '',
+                            },
+                            recipient: { id: t.recipientId, name: t.recipient?.name || '' },
+                            recipientBook: { 
+                                id: t.recipientBookId, 
+                                title: t.recipientBook?.title || '',
+                                coverImageUrl: t.recipientBook?.coverImageUrl || '',
+                            },
+                            status: t.status,
+                        }));
+
+                        setIncomingTrades(formatTrades(incoming));
+                        setOutgoingTrades(formatTrades(outgoing));
+                        setNewBio(activeUser.bio || '');
+                        setNewAvatarDataUrl(activeUser.avatarUrl || null);
+                    } catch (e) {
+                        console.error('Failed to load trades:', e);
+                    }
+                }
+            } catch (err: any) {
+                console.error('Failed to load profile:', err);
+                setErrorMessage('Не удалось загрузить профиль');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchData();
+    }, [displayUserId, activeUser, navigate, isMyProfile]);
 
     const handleTopUpSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -92,67 +136,73 @@ const UserProfilePage: React.FC = () => {
         navigate('/payment', { state: { amount: amount } });
     };
 
-   
-    const handleTradeResponse = (tradeId: string, response: 'accepted' | 'rejected') => {
+    const handleTradeResponse = async (tradeId: string, response: 'accepted' | 'rejected') => {
         setErrorMessage('');
         setSuccessMessage('');
-        const result = respondToTradeProposal(tradeId, response);
-        if (result.success) {
-            setSuccessMessage(result.message);
+        try {
+            const result = await api.respondToTrade(tradeId, response);
+            setSuccessMessage(response === 'accepted' ? 'Обмен принят!' : 'Обмен отклонён');
+            
+            // Обновляем список обменов
+            const incoming = await api.getIncomingTrades();
+            const formatTrades = (trades: any[]): BookTrade[] => trades.map(t => ({
+                id: t.id,
+                initiator: { id: t.initiatorId, name: t.initiator?.name || '' },
+                initiatorBook: { id: t.initiatorBookId, title: t.initiatorBook?.title || '', coverImageUrl: t.initiatorBook?.coverImageUrl || '' },
+                recipient: { id: t.recipientId, name: t.recipient?.name || '' },
+                recipientBook: { id: t.recipientBookId, title: t.recipientBook?.title || '', coverImageUrl: t.recipientBook?.coverImageUrl || '' },
+                status: t.status,
+            }));
+            setIncomingTrades(formatTrades(incoming));
+
+            // Обновляем баланс
+            const profile = await api.getProfile();
             if (activeUser) {
-                setDisplayUserBooks(getBooksByOwnerId(activeUser.id)); 
-                const { incoming, outgoing } = getTradeOffersForUser(activeUser.id);
-                setIncomingTrades(incoming);
-                setOutgoingTrades(outgoing);
-                const updatedUser = findUserById(activeUser.id);
-                if (updatedUser) {
-                    setActiveUser(updatedUser);
-                    setDisplayUser(updatedUser); 
-                }
+                setActiveUser({ ...activeUser, balance: parseFloat(profile.balance) });
             }
-        } else {
-            setErrorMessage(result.message);
+        } catch (err: any) {
+            setErrorMessage(err.message);
         }
     };
 
-   
-    const handleCancelTrade = (tradeId: string) => {
+    const handleCancelTrade = async (tradeId: string) => {
         setErrorMessage('');
         setSuccessMessage('');
-        const result = respondToTradeProposal(tradeId, 'cancelled');
-        if (result.success) {
-            setSuccessMessage(result.message);
-            if (activeUser) {
-                const { incoming, outgoing } = getTradeOffersForUser(activeUser.id);
-                setIncomingTrades(incoming);
-                setOutgoingTrades(outgoing);
-            }
-        } else {
-            setErrorMessage(result.message);
+        try {
+            await api.cancelTrade(tradeId);
+            setSuccessMessage('Обмен отменён');
+            
+            const outgoing = await api.getOutgoingTrades();
+            const formatTrades = (trades: any[]): BookTrade[] => trades.map(t => ({
+                id: t.id,
+                initiator: { id: t.initiatorId, name: t.initiator?.name || '' },
+                initiatorBook: { id: t.initiatorBookId, title: t.initiatorBook?.title || '', coverImageUrl: t.initiatorBook?.coverImageUrl || '' },
+                recipient: { id: t.recipientId, name: t.recipient?.name || '' },
+                recipientBook: { id: t.recipientBookId, title: t.recipientBook?.title || '', coverImageUrl: t.recipientBook?.coverImageUrl || '' },
+                status: t.status,
+            }));
+            setOutgoingTrades(formatTrades(outgoing));
+        } catch (err: any) {
+            setErrorMessage(err.message);
         }
     };
 
-   
-    const handleDeleteBook = (bookId: string) => {
+    const handleDeleteBook = async (bookId: string) => {
         if (!activeUser) {
             alert('Вы не авторизованы.');
             return;
         }
         if (window.confirm('Вы уверены, что хотите удалить эту книгу? Это действие необратимо.')) {
-            const result = deleteBook(bookId, activeUser.id);
-            if (result.success) {
-                setSuccessMessage(result.message);
-                setDisplayUserBooks(getBooksByOwnerId(activeUser.id)); 
-                const { incoming, outgoing } = getTradeOffersForUser(activeUser.id);
-                setIncomingTrades(incoming);
-                setOutgoingTrades(outgoing);
-            } else {
-                setErrorMessage(result.message);
+            try {
+                await api.deleteBook(bookId);
+                setSuccessMessage('Книга удалена');
+                setDisplayUserBooks(displayUserBooks.filter(b => b.id !== bookId));
+            } catch (err: any) {
+                setErrorMessage(err.message);
             }
         }
     };
 
-   
     const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -174,52 +224,43 @@ const UserProfilePage: React.FC = () => {
                 setSelectedAvatarFile(null);
             };
             reader.readAsDataURL(file);
-        } else {
-            setNewAvatarDataUrl(activeUser?.avatarUrl || null); 
-            setSelectedAvatarFile(null);
         }
     };
 
-    
-    const handleProfileSave = () => {
+    const handleProfileSave = async () => {
         if (!activeUser) return;
 
         setErrorMessage('');
         setSuccessMessage('');
 
-        const updates: Partial<UserProfile> = {
-            bio: newBio.trim()
-        };
-
-        if (newAvatarDataUrl) {
-            updates.avatarUrl = newAvatarDataUrl;
-        } else if (activeUser.avatarUrl) {
-            updates.avatarUrl = '/default-avatar.png';
-        }
-
-
-        const result = updateUserProfile(activeUser.id, updates);
-        if (result.success && result.user) {
-            setActiveUser(result.user); 
-            setDisplayUser(result.user); 
-            setSuccessMessage('Профиль успешно обновлен!');
-            setIsEditingProfile(false); 
-        } else {
-            setErrorMessage(result.message || 'Ошибка при обновлении профиля.');
+        try {
+            await api.updateProfile({ bio: newBio.trim() });
+            
+            // Обновляем локальный стейт
+            const updatedUser = { ...activeUser, bio: newBio.trim() };
+            setActiveUser(updatedUser);
+            setDisplayUser(updatedUser);
+            setSuccessMessage('Профиль успешно обновлён!');
+            setIsEditingProfile(false);
+        } catch (err: any) {
+            setErrorMessage(err.message || 'Ошибка при обновлении профиля.');
         }
     };
 
-   
     const getCoverPath = (imageUrl: string): string => {
+        if (!imageUrl) return '/book-cover-default.png';
         if (imageUrl.startsWith('http') || imageUrl.startsWith('data:image/')) {
             return imageUrl;
         }
         return `/${imageUrl}`;
     };
 
+    if (isLoading) {
+        return <div className="page-message">Загрузка профиля...</div>;
+    }
 
     if (!displayUser) {
-        return <div className="page-message">{errorMessage || 'Загрузка профиля...'}</div>;
+        return <div className="page-message">{errorMessage || 'Пользователь не найден'}</div>;
     }
 
     return (
@@ -282,7 +323,7 @@ const UserProfilePage: React.FC = () => {
                             onChange={(e) => setNewBio(e.target.value)}
                             placeholder="Расскажите немного о себе..."
                             rows={4}
-                            aria-label="Биография пользователя"
+                            aria-label="Биография польз��вателя"
                         />
                     </div>
 
@@ -328,19 +369,15 @@ const UserProfilePage: React.FC = () => {
                         <div className="trade-list">
                             {incomingTrades.map(trade => (
                                 <div key={trade.id} className="trade-offer-card">
-                                    <p><strong><Link to={`/user-profile/${trade.initiator.id}`}>{trade.initiator.name}</Link></strong> хочет обменять свою книгу:</p> {/* <-- Ссылка на профиль инициатора */}
+                                    <p><strong>{trade.initiator.name}</strong> хочет обменять свою книгу:</p>
                                     <div className="trade-books-display">
                                         <div className="book-item">
-                                            <Link to={`/book/${trade.initiatorBook.id}`}>
-                                                <img src={getCoverPath(trade.initiatorBook.coverImageUrl)} alt={trade.initiatorBook.title} />
-                                            </Link>
+                                            <img src={getCoverPath(trade.initiatorBook.coverImageUrl)} alt={trade.initiatorBook.title} />
                                             <p>{trade.initiatorBook.title}</p>
                                         </div>
                                         <span className="trade-arrow">&harr;</span>
                                         <div className="book-item">
-                                            <Link to={`/book/${trade.recipientBook.id}`}>
-                                                <img src={getCoverPath(trade.recipientBook.coverImageUrl)} alt={trade.recipientBook.title} />
-                                            </Link>
+                                            <img src={getCoverPath(trade.recipientBook.coverImageUrl)} alt={trade.recipientBook.title} />
                                             <p>на вашу: {trade.recipientBook.title}</p>
                                         </div>
                                     </div>
@@ -360,19 +397,15 @@ const UserProfilePage: React.FC = () => {
                         <div className="trade-list">
                             {outgoingTrades.map(trade => (
                                 <div key={trade.id} className="trade-offer-card">
-                                    <p>Вы предложили <strong><Link to={`/user-profile/${trade.recipient.id}`}>{trade.recipient.name}</Link></strong> обменять вашу книгу:</p> {/* <-- Ссылка на профиль получателя */}
+                                    <p>Вы предложили <strong>{trade.recipient.name}</strong> обменять вашу книгу:</p>
                                     <div className="trade-books-display">
                                         <div className="book-item">
-                                            <Link to={`/book/${trade.initiatorBook.id}`}>
-                                                <img src={getCoverPath(trade.initiatorBook.coverImageUrl)} alt={trade.initiatorBook.title} />
-                                            </Link>
+                                            <img src={getCoverPath(trade.initiatorBook.coverImageUrl)} alt={trade.initiatorBook.title} />
                                             <p>{trade.initiatorBook.title}</p>
                                         </div>
                                         <span className="trade-arrow">&harr;</span>
                                         <div className="book-item">
-                                            <Link to={`/book/${trade.recipientBook.id}`}>
-                                                <img src={getCoverPath(trade.recipientBook.coverImageUrl)} alt={trade.recipientBook.title} />
-                                            </Link>
+                                            <img src={getCoverPath(trade.recipientBook.coverImageUrl)} alt={trade.recipientBook.title} />
                                             <p>на: {trade.recipientBook.title}</p>
                                         </div>
                                     </div>

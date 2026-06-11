@@ -1,89 +1,93 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStatus } from '../hooks/useAuthStatus';
-import { addNewBook } from '../data/appData';
-import { ALL_BOOK_GENRES, BookGenre } from '../types/appTypes'; // Импортируем жанры
+import api from '../services/api';
+import { ALL_BOOK_GENRES, BookGenre } from '../types/appTypes';
+
+// Предопределённые обложки для книг
+const BOOK_COVERS = [
+  '/book-cover-1.png',
+  '/book-cover-2.png', 
+  '/book-cover-3.png',
+  '/book-cover-4.png',
+  '/book-cover-5.png',
+];
 
 const AddBookFormPage: React.FC = () => {
     const navigate = useNavigate();
-    const { activeUser  } = useAuthStatus();
+    const { activeUser } = useAuthStatus();
     const [title, setTitle] = useState('');
     const [author, setAuthor] = useState('');
     const [description, setDescription] = useState('');
-    const [coverImageDataUrl, setCoverImageDataUrl] = useState<string | null>(null);
+    const [selectedCover, setSelectedCover] = useState<string>(BOOK_COVERS[0]);
     const [isForSale, setIsForSale] = useState(false);
     const [priceValue, setPriceValue] = useState('');
     const [isForTrade, setIsForTrade] = useState(false);
     const [publicationYear, setPublicationYear] = useState<string>(''); 
-    const [genre, setGenre] = useState<BookGenre>(ALL_BOOK_GENRES[0]); // Добавляем состояние для жанра
+    const [genre, setGenre] = useState<BookGenre>(ALL_BOOK_GENRES[0]);
+    const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            if (!file.type.startsWith('image/')) {
-                alert('Пожалуйста, выберите файл изображения (PNG, JPG, JPEG, GIF).');
-                setCoverImageDataUrl(null);
-                return;
-            }
-
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setCoverImageDataUrl(reader.result as string);
-            };
-            reader.onerror = () => {
-                alert('Не удалось прочитать файл.');
-                setCoverImageDataUrl(null);
-            };
-            reader.readAsDataURL(file);
-        } else {
-            setCoverImageDataUrl(null);
-        }
+    const handleCoverSelect = (coverUrl: string) => {
+        setSelectedCover(coverUrl);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError('');
 
-        if (!activeUser ) {
+        if (!activeUser) {
             alert('Необходимо войти в систему, чтобы добавить книгу.');
             navigate('/login');
             return;
         }
 
         if (isForSale && (!priceValue || Number(priceValue) <= 0)) {
-            alert('Пожалуйста, укажите корректную цену для продажи (больше 0).');
+            setError('Пожалуйста, укажите корректную цену для продажи (больше 0).');
+            return;
+        }
+
+        if (!isForSale && !isForTrade) {
+            setError('Выберите хотя бы один вариант: продажа или обмен.');
             return;
         }
 
         const year = Number(publicationYear);
         if (isNaN(year) || year <= 0 || year > new Date().getFullYear() + 5) {
-            alert('Пожалуйста, укажите корректный год публикации.');
+            setError('Пожалуйста, укажите корректный год публикации.');
             return;
         }
 
-        const finalCoverImageUrl = coverImageDataUrl || '/book-cover-default.png';
+        setIsLoading(true);
+        try {
+            const finalCoverImageUrl = selectedCover;
 
-        const newBookData = {
-            title,
-            author,
-            description,
-            coverImageUrl: finalCoverImageUrl,
-            isForSale,
-            priceValue: isForSale ? Number(priceValue) : undefined,
-            isForTrade,
-            publicationYear: year,
-            genre // Добавляем жанр
-        };
+            await api.createBook({
+                title,
+                author,
+                description,
+                coverImageUrl: finalCoverImageUrl,
+                isForSale,
+                priceValue: isForSale ? Number(priceValue) : undefined,
+                isForTrade,
+                publicationYear: year,
+                genre,
+            });
 
-        addNewBook(newBookData, activeUser );
-
-        alert('Книга успешно добавлена в каталог!');
-        navigate('/');
+            alert('Книга успешно добавлена в каталог!');
+            navigate('/');
+        } catch (err: any) {
+            setError(err.message || 'Ошибка при добавлении книги');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
         <div className="form-container">
             <h2 className="form-title">Добавить новую книгу</h2>
             <form onSubmit={handleSubmit} className="add-book-form">
+                {error && <p className="error-message">{error}</p>}
 
                 <div className="form-group">
                     <label htmlFor="title">Название:</label>
@@ -94,6 +98,7 @@ const AddBookFormPage: React.FC = () => {
                         onChange={(e) => setTitle(e.target.value)}
                         required
                         aria-label="Название книги"
+                        disabled={isLoading}
                     />
                 </div>
 
@@ -106,6 +111,7 @@ const AddBookFormPage: React.FC = () => {
                         onChange={(e) => setAuthor(e.target.value)}
                         required
                         aria-label="Автор книги"
+                        disabled={isLoading}
                     />
                 </div>
 
@@ -118,6 +124,7 @@ const AddBookFormPage: React.FC = () => {
                         required
                         rows={6}
                         aria-label="Описание книги"
+                        disabled={isLoading}
                     />
                 </div>
 
@@ -132,10 +139,10 @@ const AddBookFormPage: React.FC = () => {
                         min="1" 
                         max={new Date().getFullYear() + 5} 
                         aria-label="Год публикации книги"
+                        disabled={isLoading}
                     />
                 </div>
 
-                {/* Добавляем выпадающий список для выбора жанра */}
                 <div className="form-group">
                     <label htmlFor="genre">Жанр:</label>
                     <select
@@ -144,6 +151,7 @@ const AddBookFormPage: React.FC = () => {
                         onChange={(e) => setGenre(e.target.value as BookGenre)}
                         required
                         aria-label="Жанр книги"
+                        disabled={isLoading}
                     >
                         {ALL_BOOK_GENRES.map((g) => (
                             <option key={g} value={g}>
@@ -154,25 +162,28 @@ const AddBookFormPage: React.FC = () => {
                 </div>
 
                 <div className="form-group">
-                    <label htmlFor="coverImage">Обложка книги (файл):</label>
-                    <input
-                        type="file"
-                        id="coverImage"
-                        accept="image/*"
-                        onChange={handleFileChange}
-                        aria-label="Загрузить обложку книги"
-                    />
-                    {coverImageDataUrl && (
-                        <div className="cover-preview">
-                            <p>Предпросмотр обложки:</p>
-                            <img src={coverImageDataUrl} alt="Предпросмотр обложки" style={{ maxWidth: '150px', maxHeight: '200px', marginTop: '10px', border: '1px solid #ddd' }} />
-                        </div>
-                    )}
-                    {!coverImageDataUrl && (
-                        <p className="info-message" style={{ marginTop: '10px' }}>
-                            Если обложка не выбрана, будет использована стандартная.
-                        </p>
-                    )}
+                    <label>Обложка книги:</label>
+                    <div className="cover-selection-grid" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '10px' }}>
+                        {BOOK_COVERS.map((cover, index) => (
+                            <div 
+                                key={index}
+                                onClick={() => handleCoverSelect(cover)}
+                                style={{ 
+                                    cursor: 'pointer',
+                                    border: selectedCover === cover ? '3px solid #4CAF50' : '2px solid #ddd',
+                                    borderRadius: '8px',
+                                    padding: '5px',
+                                    transition: 'all 0.2s ease'
+                                }}
+                            >
+                                <img 
+                                    src={cover} 
+                                    alt={`Обложка ${index + 1}`} 
+                                    style={{ width: '80px', height: '100px', objectFit: 'cover', borderRadius: '4px' }} 
+                                />
+                            </div>
+                        ))}
+                    </div>
                 </div>
 
                 <div className="form-group options-group">
@@ -185,12 +196,13 @@ const AddBookFormPage: React.FC = () => {
                             checked={isForSale}
                             onChange={(e) => setIsForSale(e.target.checked)}
                             aria-label="Выставить на продажу"
+                            disabled={isLoading}
                         />
                         <label htmlFor="isForSale">Выставить на продажу</label>
                     </div>
 
                     {isForSale && (
-                         <div className="form-group nested-group">
+                        <div className="form-group nested-group">
                             <label htmlFor="priceValue">Цена (₽):</label>
                             <input
                                 type="number"
@@ -200,6 +212,7 @@ const AddBookFormPage: React.FC = () => {
                                 required={isForSale}
                                 min="1"
                                 aria-label="Цена книги"
+                                disabled={isLoading}
                             />
                         </div>
                     )}
@@ -211,12 +224,15 @@ const AddBookFormPage: React.FC = () => {
                             checked={isForTrade}
                             onChange={(e) => setIsForTrade(e.target.checked)}
                             aria-label="Выставить на обмен"
+                            disabled={isLoading}
                         />
                         <label htmlFor="isForTrade">Выставить на обмен</label>
                     </div>
                 </div>
 
-                <button type="submit" className="submit-button">Разместить книгу</button>
+                <button type="submit" className="submit-button" disabled={isLoading}>
+                    {isLoading ? 'Добавление...' : 'Разместить книгу'}
+                </button>
             </form>
         </div>
     );

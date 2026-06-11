@@ -90,8 +90,24 @@ User.init(
       {
         unique: true,
         fields: ['name']
+      },
+      {
+        // Индекс для поиска администраторов
+        fields: ['role']
+      },
+      {
+        // Индекс для сортировки по балансу
+        fields: ['balance']
       }
-    ]
+    ],
+    validate: {
+      // CHECK constraint: Баланс не может быть отрицательным
+      validBalance(this: any) {
+        if (this.balance < 0) {
+          throw new Error('Баланс не может быть отрицательным');
+        }
+      }
+    }
   }
 );
 

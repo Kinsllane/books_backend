@@ -1,13 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuthStatus } from '../hooks/useAuthStatus';
-import {
-    retrieveBookById,
-    addReviewToBook,
-    addQuoteToBook,
-    purchaseBook,
-    availableBooks,
-} from '../data/appData';
+import api from '../services/api';
+import type { BookEntry } from '../types/appTypes';
 
 import ReviewForm from '../components/forms/ReviewForm';
 import QuoteForm from '../components/forms/QuoteForm';
@@ -17,31 +12,85 @@ const BookDetailsPage: React.FC = () => {
     const navigate = useNavigate();
     const { activeUser, setActiveUser } = useAuthStatus();
 
-    const [book, setBook] = useState(() => retrieveBookById(id));
+    const [book, setBook] = useState<BookEntry | null>(null);
     const [showReviewForm, setShowReviewForm] = useState(false);
     const [showQuoteForm, setShowQuoteForm] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        setBook(retrieveBookById(id));
-    }, [id, availableBooks]);
+        const fetchBook = async () => {
+            if (!id) return;
+            setIsLoading(true);
+            try {
+                const data = await api.getBookById(id);
+                setBook({
+                    id: data.id,
+                    title: data.title,
+                    author: data.author,
+                    description: data.description,
+                    coverImageUrl: data.coverImageUrl,
+                    currentOwner: {
+                        id: data.currentOwnerId,
+                        name: data.currentOwner?.name || 'Unknown',
+                    },
+                    isForSale: data.isForSale,
+                    isForTrade: data.isForTrade,
+                    priceValue: data.priceValue ? parseFloat(data.priceValue) : undefined,
+                    publicationYear: data.publicationYear,
+                    genre: data.genre,
+                    reviews: data.reviews || [],
+                    quotes: data.quotes || [],
+                });
+            } catch (err) {
+                console.error('Failed to load book:', err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
 
-    const handleAddReview = (text: string) => {
+        fetchBook();
+    }, [id]);
+
+    const handleAddReview = async (text: string) => {
         if (activeUser && book) {
-            addReviewToBook(book.id, text, activeUser);
-            setBook(retrieveBookById(book.id));
-            setShowReviewForm(false);
+            try {
+                await api.request(`/books/${book.id}/reviews`, {
+                    method: 'POST',
+                    body: JSON.stringify({ text }),
+                });
+                // Перезагружаем книгу
+                const updatedBook = await api.getBookById(book.id);
+                setBook({
+                    ...book,
+                    reviews: updatedBook.reviews || [],
+                });
+                setShowReviewForm(false);
+            } catch (err: any) {
+                alert(err.message);
+            }
         }
     };
 
-    const handleAddQuote = (text: string) => {
+    const handleAddQuote = async (text: string) => {
         if (activeUser && book) {
-            addQuoteToBook(book.id, text, activeUser);
-            setBook(retrieveBookById(book.id));
-            setShowQuoteForm(false);
+            try {
+                await api.request(`/books/${book.id}/quotes`, {
+                    method: 'POST',
+                    body: JSON.stringify({ text }),
+                });
+                const updatedBook = await api.getBookById(book.id);
+                setBook({
+                    ...book,
+                    quotes: updatedBook.quotes || [],
+                });
+                setShowQuoteForm(false);
+            } catch (err: any) {
+                alert(err.message);
+            }
         }
     };
 
-    const handleBuyBook = () => {
+    const handleBuyBook = async () => {
         if (!activeUser) {
             alert('Пожалуйста, войдите в систему, чтобы совершить покупку.');
             navigate('/login');
@@ -52,16 +101,25 @@ const BookDetailsPage: React.FC = () => {
             return;
         }
 
-        const result = purchaseBook(book.id, activeUser.id);
-        if (result.success) {
-            alert(result.message);
-            setBook(result.book || retrieveBookById(book.id));
-            if (result.buyer) {
-                const { password, ...userToStore } = result.buyer;
-                setActiveUser(userToStore);
-            }
-        } else {
-            alert(result.message);
+        try {
+            await api.request(`/books/${book.id}/purchase`, {
+                method: 'POST',
+            });
+            alert('Книга успешно куплена!');
+            // Обновляем профиль и книгу
+            const profile = await api.getProfile();
+            setActiveUser({ ...activeUser, balance: parseFloat(profile.balance) });
+            const updatedBook = await api.getBookById(book.id);
+            setBook({
+                ...book,
+                currentOwner: {
+                    id: updatedBook.currentOwnerId,
+                    name: updatedBook.currentOwner?.name || '',
+                },
+                isForSale: updatedBook.isForSale,
+            });
+        } catch (err: any) {
+            alert(err.message);
         }
     };
 
@@ -76,11 +134,17 @@ const BookDetailsPage: React.FC = () => {
         }
     };
 
+    if (isLoading) {
+        return <div className="page-message">Загрузка...</div>;
+    }
+
     if (!book) {
         return <div className="page-message">Книга не найдена.</div>;
     }
+
     const isOwner = activeUser?.id === book.currentOwner.id;
     const coverPath =
+        !book.coverImageUrl ? '/book-cover-default.png' :
         book.coverImageUrl.startsWith('http') || book.coverImageUrl.startsWith('data:image/')
             ? book.coverImageUrl
             : `/${book.coverImageUrl}`;
@@ -96,8 +160,7 @@ const BookDetailsPage: React.FC = () => {
                     <h2 className="book-author">{book.author}</h2>
                     <p className="book-owner">
                         <strong>Владелец:</strong>{' '}
-                        <Link to={`/user-profile/${book.currentOwner.id}`}>{book.currentOwner.name}</Link>{' '}
-                        {/* <-- ИЗМЕНЕНИЕ ЗДЕСЬ */}
+                        <Link to={`/user-profile/${book.currentOwner.id}`}>{book.currentOwner.name}</Link>
                     </p>
                     {book.isForSale && book.priceValue && (
                         <p className="book-price">
@@ -109,7 +172,7 @@ const BookDetailsPage: React.FC = () => {
                         <strong>Год публикации:</strong> {book.publicationYear}
                     </p>
                     <p className="book-genre">
-                        <strong>Жанр:</strong> {book.genre} {/* <-- ОТОБРАЖАЕМ ЖАНР */}
+                        <strong>Жанр:</strong> {book.genre}
                     </p>
 
                     <div className="book-actions">
@@ -143,23 +206,21 @@ const BookDetailsPage: React.FC = () => {
             <div className="book-additional-sections">
                 <section className="reviews-section">
                     <h3 className="section-title">Рецензии</h3>
-                    {book.reviews.length > 0 ? (
-                        book.reviews.map((review) => (
+                    {book.reviews && book.reviews.length > 0 ? (
+                        book.reviews.map((review: any) => (
                             <div key={review.id} className="content-card review-card">
                                 <p className="content-text">"{review.text}"</p>
                                 <div className="content-author">
-                                    -{' '}
-                                    <Link to={`/user-profile/${review.reviewer.id}`}>
-                                        {review.reviewer.name}
-                                    </Link>{' '}
-                                    {/* <-- ИЗМЕНЕНИЕ ЗДЕСЬ */}
+                                    - <Link to={`/user-profile/${review.reviewerId || review.reviewer?.id}`}>
+                                        {review.reviewer?.name || 'Unknown'}
+                                    </Link>
                                 </div>
                             </div>
                         ))
                     ) : (
                         <p className="no-content-message">Рецензий пока нет.</p>
                     )}
-                    {activeUser &&
+                    {activeUser && !isOwner &&
                         (!showReviewForm ? (
                             <button onClick={() => setShowReviewForm(true)} className="add-content-button">
                                 Добавить рецензию
@@ -171,23 +232,21 @@ const BookDetailsPage: React.FC = () => {
 
                 <section className="quotes-section">
                     <h3 className="section-title">Цитаты</h3>
-                    {book.quotes.length > 0 ? (
-                        book.quotes.map((quote) => (
+                    {book.quotes && book.quotes.length > 0 ? (
+                        book.quotes.map((quote: any) => (
                             <div key={quote.id} className="content-card quote-card">
                                 <p className="content-text">"{quote.text}"</p>
                                 <div className="content-author">
-                                    -{' '}
-                                    <Link to={`/user-profile/${quote.quoter.id}`}>
-                                        {quote.quoter.name}
-                                    </Link>{' '}
-                                    {/* <-- ИЗМЕНЕНИЕ ЗДЕСЬ */}
+                                    - <Link to={`/user-profile/${quote.quoterId || quote.quoter?.id}`}>
+                                        {quote.quoter?.name || 'Unknown'}
+                                    </Link>
                                 </div>
                             </div>
                         ))
                     ) : (
                         <p className="no-content-message">Цитат пока нет.</p>
                     )}
-                    {activeUser &&
+                    {activeUser && !isOwner &&
                         (!showQuoteForm ? (
                             <button onClick={() => setShowQuoteForm(true)} className="add-content-button">
                                 Добавить цитату

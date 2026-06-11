@@ -6,17 +6,19 @@ import Book from './Book';
 interface BookReviewAttributes {
   id: string;
   text: string;
+  rating: number;
   bookId: string;
   reviewerId: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-interface BookReviewCreationAttributes extends Optional<BookReviewAttributes, 'id' | 'createdAt' | 'updatedAt'> {}
+interface BookReviewCreationAttributes extends Optional<BookReviewAttributes, 'id' | 'rating' | 'createdAt' | 'updatedAt'> {}
 
 class BookReview extends Model<BookReviewAttributes, BookReviewCreationAttributes> implements BookReviewAttributes {
   public id!: string;
   public text!: string;
+  public rating!: number;
   public bookId!: string;
   public reviewerId!: string;
   public readonly createdAt!: Date;
@@ -40,6 +42,15 @@ BookReview.init(
       validate: {
         notEmpty: true,
         len: [1, 2000]
+      }
+    },
+    rating: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 5,
+      validate: {
+        min: 1,
+        max: 5
       }
     },
     bookId: {

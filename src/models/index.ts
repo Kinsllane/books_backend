@@ -4,6 +4,7 @@ import Book from './Book';
 import BookReview from './BookReview';
 import BookQuote from './BookQuote';
 import BookTrade from './BookTrade';
+import Transaction from './Transaction';
 
 // Ассоциации User - Book (One-to-Many)
 User.hasMany(Book, {
@@ -92,11 +93,40 @@ BookTrade.belongsTo(Book, {
   as: 'recipientBook'
 });
 
+// Ассоциации для Transaction (One-to-Many)
+User.hasMany(Transaction, {
+  foreignKey: 'fromUserId',
+  as: 'sentTransactions'
+});
+Transaction.belongsTo(User, {
+  foreignKey: 'fromUserId',
+  as: 'fromUser'
+});
+
+User.hasMany(Transaction, {
+  foreignKey: 'toUserId',
+  as: 'receivedTransactions'
+});
+Transaction.belongsTo(User, {
+  foreignKey: 'toUserId',
+  as: 'toUser'
+});
+
+Book.hasMany(Transaction, {
+  foreignKey: 'bookId',
+  as: 'transactions'
+});
+Transaction.belongsTo(Book, {
+  foreignKey: 'bookId',
+  as: 'book'
+});
+
 export {
   sequelize,
   User,
   Book,
   BookReview,
   BookQuote,
-  BookTrade
+  BookTrade,
+  Transaction
 };

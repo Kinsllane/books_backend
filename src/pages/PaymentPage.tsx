@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStatus } from '../hooks/useAuthStatus';
-import { topUpUserBalance } from '../data/appData';
+import api from '../services/api';
 
 const PaymentPage: React.FC = () => {
     const navigate = useNavigate();
@@ -14,6 +14,7 @@ const PaymentPage: React.FC = () => {
     const [amount, setAmount] = useState<number | null>(null); 
     const [errorMessage, setErrorMessage] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
 
     useEffect(() => {
         if (location.state && typeof location.state.amount === 'number') {
@@ -24,7 +25,7 @@ const PaymentPage: React.FC = () => {
         }
     }, [location.state, navigate]);
 
-    const handlePaymentSubmit = (e: React.FormEvent) => {
+    const handlePaymentSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setErrorMessage('');
         setSuccessMessage('');
@@ -45,14 +46,24 @@ const PaymentPage: React.FC = () => {
             return;
         }
 
-        const result = topUpUserBalance(activeUser.id, amount);
-
-        if (result.success && result.user) {
-            setActiveUser(result.user); 
+        setIsProcessing(true);
+        try {
+            // Пополняем баланс через API
+            await api.topUpBalance(amount);
+            
+            // Обновляем профиль
+            const profile = await api.getProfile();
+            setActiveUser({
+                ...activeUser,
+                balance: parseFloat(profile.balance),
+            });
+            
             setSuccessMessage(`Баланс успешно пополнен на ${amount}₽! Вы будете перенаправлены в профиль.`);
             setTimeout(() => navigate('/my-profile'), 3000);
-        } else {
-            setErrorMessage(result.message || 'Произошла ошибка при пополнении баланса.');
+        } catch (err: any) {
+            setErrorMessage(err.message || 'Произошла ошибка при пополнении баланса.');
+        } finally {
+            setIsProcessing(false);
         }
     };
 
@@ -79,6 +90,7 @@ const PaymentPage: React.FC = () => {
                         placeholder="XXXX XXXX XXXX XXXX"
                         required
                         aria-label="Номер банковской карты"
+                        disabled={isProcessing}
                     />
                 </div>
 
@@ -93,6 +105,7 @@ const PaymentPage: React.FC = () => {
                             placeholder="ММ/ГГ"
                             required
                             aria-label="Срок действия карты"
+                            disabled={isProcessing}
                         />
                     </div>
                     <div className="half-width-item">
@@ -105,11 +118,14 @@ const PaymentPage: React.FC = () => {
                             placeholder="XXX"
                             required
                             aria-label="CVV код карты"
+                            disabled={isProcessing}
                         />
                     </div>
                 </div>
 
-                <button type="submit" className="submit-button" disabled={!!successMessage}>Оплатить {amount}₽</button>
+                <button type="submit" className="submit-button" disabled={isProcessing || !!successMessage}>
+                    {isProcessing ? 'Обработка...' : `Оплатить ${amount}₽`}
+                </button>
             </form>
         </div>
     );

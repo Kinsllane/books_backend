@@ -70,9 +70,9 @@ Book.init(
       }
     },
     coverImageUrl: {
-      type: DataTypes.STRING(500),
+      type: DataTypes.STRING(255),
       allowNull: false,
-      defaultValue: '/book-cover-default.png'
+      defaultValue: '/book-cover-1.png'
     },
     currentOwnerId: {
       type: DataTypes.UUID,
@@ -130,8 +130,30 @@ Book.init(
       },
       {
         fields: ['currentOwnerId']
+      },
+      {
+        // Составной индекс для часто используемых фильтров
+        fields: ['isForSale', 'genre']
+      },
+      {
+        // Индекс для поиска доступных книг для обмена
+        fields: ['isForTrade', 'currentOwnerId']
       }
-    ]
+    ],
+    validate: {
+      // CHECK constraint: Книга должна быть либо на продажу, либо на обмен, либо на оба
+      atLeastOneAvailable(this: any) {
+        if (!this.isForSale && !this.isForTrade) {
+          throw new Error('Книга должна быть выставлена на продажу и/или на обмен');
+        }
+      },
+      // CHECK constraint: Если на продажу, то должна быть цена
+      priceRequiredForSale(this: any) {
+        if (this.isForSale && !this.priceValue) {
+          throw new Error('Для книги на продажу требуется указать цену');
+        }
+      }
+    }
   }
 );
 

@@ -34,12 +34,10 @@ export const createBookSchema = {
         'string.empty': 'Description cannot be empty',
       }),
     coverImageUrl: Joi.string()
-      .uri()
-      .max(500)
+      .max(255)
       .default('/book-cover-default.png')
       .messages({
-        'string.uri': 'Cover image URL must be a valid URI',
-        'string.max': 'Cover image URL must be at most 500 characters long',
+        'string.max': 'Cover image URL must be at most 255 characters long',
       }),
     isForSale: Joi.boolean().default(false),
     isForTrade: Joi.boolean().default(false),
@@ -91,9 +89,8 @@ export const updateBookSchema = {
       'string.min': 'Description must be at least 1 character long',
       'string.empty': 'Description cannot be empty',
     }),
-    coverImageUrl: Joi.string().uri().max(500).messages({
-      'string.uri': 'Cover image URL must be a valid URI',
-      'string.max': 'Cover image URL must be at most 500 characters long',
+    coverImageUrl: Joi.string().max(255).messages({
+      'string.max': 'Cover image URL must be at most 255 characters long',
     }),
     isForSale: Joi.boolean(),
     isForTrade: Joi.boolean(),

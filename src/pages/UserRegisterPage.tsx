@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStatus } from '../hooks/useAuthStatus'; 
-import { findUserByUsername, registerNewUser } from '../data/appData'; 
+import api from '../services/api';
 
 const UserRegisterPage: React.FC = () => {
     const [username, setUsername] = useState(''); 
     const [password, setPassword] = useState(''); 
     const [confirmPassword, setConfirmPassword] = useState(''); 
-    const [errorMessage, setErrorMessage] = useState(''); 
+    const [errorMessage, setErrorMessage] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     
     const { setActiveUser } = useAuthStatus(); 
     const navigate = useNavigate(); 
-    const handleRegisterSubmit = (e: React.FormEvent) => {
+
+    const handleRegisterSubmit = async (e: React.FormEvent) => {
         e.preventDefault(); 
         setErrorMessage(''); 
 
@@ -25,18 +27,28 @@ const UserRegisterPage: React.FC = () => {
             return;
         }
 
-        if (findUserByUsername(username)) {
-            setErrorMessage('Пользователь с таким именем уже существует. Пожалуйста, выберите другое имя.');
-            return;
+        setIsLoading(true);
+        try {
+            const data = await api.register(username, password);
+            
+            const userProfile = {
+                id: data.user.id,
+                name: data.user.name,
+                balance: typeof data.user.balance === 'string' ? parseFloat(data.user.balance) : data.user.balance,
+                registrationDate: data.user.registrationDate,
+                role: data.user.role,
+                avatarUrl: data.user.avatarUrl,
+                bio: data.user.bio,
+            };
+            
+            setActiveUser(userProfile);
+            alert('Регистрация прошла успешно! Вы вошли в систему.'); 
+            navigate('/'); 
+        } catch (err: any) {
+            setErrorMessage(err.message || 'Ошибка при регистрации. Попробуйте ещё раз.');
+        } finally {
+            setIsLoading(false);
         }
-
-        const newUser = registerNewUser(username, password);
-        
-        const { password: _, ...userToStore } = newUser; 
-        setActiveUser(userToStore);
-
-        alert('Регистрация прошла успешно! Вы вошли в систему.'); 
-        navigate('/'); 
     };
 
     return (
@@ -54,6 +66,7 @@ const UserRegisterPage: React.FC = () => {
                         onChange={(e) => setUsername(e.target.value)} 
                         required 
                         aria-label="Имя пользователя"
+                        disabled={isLoading}
                     />
                 </div>
                 
@@ -66,6 +79,7 @@ const UserRegisterPage: React.FC = () => {
                         onChange={(e) => setPassword(e.target.value)} 
                         required 
                         aria-label="Пароль"
+                        disabled={isLoading}
                     />
                 </div>
 
@@ -78,10 +92,13 @@ const UserRegisterPage: React.FC = () => {
                         onChange={(e) => setConfirmPassword(e.target.value)} 
                         required 
                         aria-label="Подтвердите пароль"
+                        disabled={isLoading}
                     />
                 </div>
                 
-                <button type="submit" className="submit-button">Зарегистрироваться</button>
+                <button type="submit" className="submit-button" disabled={isLoading}>
+                    {isLoading ? 'Регистрация...' : 'Зарегистрироваться'}
+                </button>
             </form>
             
             <p className="form-footer-text">
